@@ -1,0 +1,7 @@
+.env
+.venv
+log
+__pycache__
+AGENTS.md
+result
+food_list.txt

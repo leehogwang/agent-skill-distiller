@@ -1,0 +1,10 @@
+# API 모델용
+openai
+google-genai
+python-dotenv
+
+# 로컬 Qwen3-VL용 (무거움 - 필요할 때 별도 설치)
+# torch
+# transformers
+# accelerate
+# qwen-vl-utils
