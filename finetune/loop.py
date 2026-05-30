@@ -433,6 +433,10 @@ def main():
     print(f"\n루프 시작: epochs={args.epochs}, patience={patience}, lr={config.LOOP_LEARNING_RATE}")
     print(f"모델: {model_keys}\n")
 
+    # 루프 시작 전 베이스라인 1회 측정
+    print("=== 베이스라인 측정 (스킬 없음) ===")
+    _run_evaluate(model_keys, "log/baseline")
+
     for epoch in range(1, args.epochs + 1):
         max_chars = int(
             config.SYNTHESIS_MAX_SKILL_CHARS * (config.LOOP_LEARNING_RATE ** (epoch - 1))
@@ -453,10 +457,6 @@ def main():
         # A. TRAIN 추론
         print("\n--- A. TRAIN 추론 ---")
         train_data = _run_pipeline(model_keys, train_prompt, epoch_dir)
-
-        # B. TEST 추론 (스킬 없음, 로그용)
-        print("\n--- B. TEST 추론 (스킬 없음) ---")
-        _run_evaluate(model_keys, epoch_dir)
 
         # C. 패턴 추출 + 스킬 합성
         print("\n--- C. 패턴 추출 + 스킬 합성 ---")
