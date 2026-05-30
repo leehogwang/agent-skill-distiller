@@ -7,7 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 import config
-from utils import parse_food_list, find_q3_image, parse_trajectory, compute_outcomes
+from utils import parse_food_list, parse_food_aliases, find_q3_image, parse_trajectory, compute_outcomes
 
 load_dotenv()
 
@@ -54,7 +54,8 @@ def run(
             "trajectory": trajectory,
         })
 
-    results = compute_outcomes(results, os.environ["OPENAI_KEY"])
+    aliases = parse_food_aliases(config.FOOD_LIST_TEST_PATH)
+    results = compute_outcomes(results, os.environ["OPENAI_KEY"], aliases)
 
     if not config.EVAL_SHOW_ES:
         for item in results:

@@ -19,6 +19,7 @@ from google import genai
 import config
 from utils import (
     parse_food_list,
+    parse_food_aliases,
     find_q3_image,
     parse_trajectory,
     compute_outcomes,
@@ -91,7 +92,8 @@ def _run_pipeline(
             "trajectory": trajectory,
         })
 
-    results = compute_outcomes(results, os.environ["OPENAI_KEY"])
+    aliases = parse_food_aliases(config.FOOD_LIST_TRAIN_PATH)
+    results = compute_outcomes(results, os.environ["OPENAI_KEY"], aliases)
 
     output = {
         "task": config.TASK,
@@ -148,7 +150,8 @@ def _run_evaluate(
             "trajectory": trajectory,
         })
 
-    results = compute_outcomes(results, os.environ["OPENAI_KEY"])
+    aliases = parse_food_aliases(config.FOOD_LIST_TEST_PATH)
+    results = compute_outcomes(results, os.environ["OPENAI_KEY"], aliases)
 
     if not config.EVAL_SHOW_ES:
         for item in results:
@@ -377,7 +380,8 @@ def _run_eval_with_skill(
             "trajectory": trajectory,
         })
 
-    results = compute_outcomes(results, os.environ["OPENAI_KEY"])
+    aliases = parse_food_aliases(config.FOOD_LIST_TEST_PATH)
+    results = compute_outcomes(results, os.environ["OPENAI_KEY"], aliases)
 
     output = {
         "task": config.TASK,

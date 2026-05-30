@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 import config
-from utils import parse_food_list, find_q3_image, embed_all, cosine_similarity
+from utils import parse_food_list, parse_food_aliases, find_q3_image, embed_all, cosine_similarity
 
 load_dotenv()
 
@@ -45,9 +45,13 @@ def run(model_keys: list[str], prompt: str, output_path: str):
         raw_results.append({"food": food, "image": image_path, "predictions": predictions})
 
     # ES + EWC 계산
+    aliases = parse_food_aliases(config.FOOD_LIST_TEST_PATH)
     client = OpenAI(api_key=os.environ["OPENAI_KEY"])
-    all_texts = [item["food"] for item in raw_results]
+    all_texts = []
     for item in raw_results:
+        food = item["food"]
+        all_texts.append(food)
+        all_texts.extend(aliases.get(food, [food]))
         all_texts.extend(item["predictions"].values())
 
     print(f"\n임베딩 요청: {len(set(t.strip() for t in all_texts if t.strip()))}개 고유 텍스트")
@@ -58,13 +62,18 @@ def run(model_keys: list[str], prompt: str, output_path: str):
 
     for item in raw_results:
         food = item["food"]
-        food_emb = emb_cache.get(food.strip())
+        food_names = aliases.get(food, [food])
+        food_embs = [emb_cache[n.strip()] for n in food_names if n.strip() in emb_cache]
         item_preds = {}
 
         for model_key, pred_text in item["predictions"].items():
             pred_clean = pred_text.strip()
             es = pred_clean == food
-            ewc = cosine_similarity(food_emb, emb_cache[pred_clean]) if food_emb and pred_clean in emb_cache else None
+            if food_embs and pred_clean in emb_cache:
+                obs_emb = emb_cache[pred_clean]
+                ewc = max(cosine_similarity(fe, obs_emb) for fe in food_embs)
+            else:
+                ewc = None
             item_preds[model_key] = {"text": pred_text, "ES": es, "EWC": ewc}
 
             if model_key in model_stats:
