@@ -2,6 +2,11 @@ from models.gemini import GeminiVLM
 from models.openai_model import OpenAIVLM
 from models.local_qwen import LocalQwenVLM
 
+# for loop
+LOOP_EPOCHS = 10
+EARLY_STOPPING_PATIENCE = 3
+LOOP_LEARNING_RATE = 1.2  # 매 epoch마다 SYNTHESIS_MAX_SKILL_CHARS에 곱함
+
 IMAGE_ROOT = (
     "/home/202421012/food/"
     "122.음식_분류를_위한_음식종류_및_양에_따른_칼로리_데이터셋(재료,_양념,_완제품_등)/"
@@ -103,6 +108,35 @@ SYNTHESIS_PROMPT = (
     "criteria for when to apply, and verification methods.\n"
     "4. Maintain information density: every sentence carries actionable content; no platitudes.\n"
     "5. Keep the description short: 1-2 sentences only; all detail goes in the body.\n"
+    "Schema requirements. name (lowercase-hyphen slug, <= 64 chars); description (1-2\n"
+    "sentences: what class of problems, when to apply); body (Markdown with strategies,\n"
+    "pitfalls, decision criteria, verification).\n"
+    "Budget. Maximum [{max_skills}] skills, each <= [{max_skill_chars}] characters.\n"
+    "Output format. A JSON list of {{\"name\", \"description\", \"body\"}} objects.\n"
+    "Output ONLY the JSON list with no markdown fences."
+)
+
+SYNTHESIS_MERGE_PROMPT = (
+    "You receive two skills, each synthesised from agent trajectories,\n"
+    "and merge them into a consolidated skill set.\n"
+    "\n"
+    "Merge strategy.\n"
+    "1. Deduplicate: if both skills describe the same or overlapping behaviour,\n"
+    "combine them into ONE stronger instruction using the best description.\n"
+    "2. Generalise: raise the abstraction level to cover more scenarios; a single\n"
+    "well-generalised skill is worth more than several narrow instructions.\n"
+    "3. Preserve utility: keep concrete, actionable strategies and remove vague,\n"
+    "low-value, or redundant guidance.\n"
+    "4. Integrate both polarities: the merged skill should include both what TO DO\n"
+    "and what to AVOID when such information exists in either input skill.\n"
+    "5. Organise thematically: group related guidance into coherent skills around\n"
+    "shared themes.\n"
+    "6. Structure the body clearly: recommended approaches, common pitfalls, decision\n"
+    "criteria for when to apply, and verification methods.\n"
+    "7. Maintain information density: every sentence carries actionable content; no platitudes.\n"
+    "8. Keep the description short: 1-2 sentences only; all detail goes in the body.\n"
+    "Quality requirements. Each merged skill must be transferable across tasks,\n"
+    "information-dense, non-obvious, actionable, and free of task-specific details.\n"
     "Schema requirements. name (lowercase-hyphen slug, <= 64 chars); description (1-2\n"
     "sentences: what class of problems, when to apply); body (Markdown with strategies,\n"
     "pitfalls, decision criteria, verification).\n"
