@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLM Food Recognition Pipeline</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  padding: 48px 20px 100px;
+}
+
+/* ── Header ── */
+.page-title {
+  text-align: center;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+}
+.page-subtitle {
+  text-align: center;
+  color: #475569;
+  font-size: 0.82rem;
+  margin-bottom: 56px;
+  font-family: monospace;
+}
+
+/* ── Section wrapper ── */
+.pipeline-section {
+  max-width: 640px;
+  margin: 0 auto 12px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  margin-bottom: 28px;
+}
+.section-header.blue  { background: rgba(59,130,246,.1);  border: 1px solid rgba(59,130,246,.28); }
+.section-header.purple{ background: rgba(139,92,246,.1);  border: 1px solid rgba(139,92,246,.28); }
+
+.section-label {
+  font-family: monospace;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.section-meta {
+  font-size: 0.73rem;
+  color: #64748b;
+  margin-top: 3px;
+}
+.section-badge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-family: monospace;
+  color: #64748b;
+  background: #0f172a;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid #1e293b;
+}
+
+/* ── Flow ── */
+.flow { display: flex; flex-direction: column; align-items: center; }
+
+/* ── Nodes ── */
+.node {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.node.file    { border-color: rgba(16,185,129,.45);  background: rgba(16,185,129,.06); }
+.node.output  { border-color: rgba(16,185,129,.55);  background: rgba(16,185,129,.09); }
+.node.blue    { border-color: rgba(59,130,246,.4); }
+.node.purple  { border-color: rgba(139,92,246,.4); }
+.node.models  { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.05); }
+
+.node-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.node-icon { font-size: 1rem; }
+
+.node-body {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+.node-body code {
+  font-family: monospace;
+  font-size: 0.75rem;
+  background: #0f172a;
+  color: #7dd3fc;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.node-body strong { color: #cbd5e1; }
+
+/* ── Model chips ── */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.chip {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+.chip.local  { background: rgba(99,102,241,.18); border: 1px solid rgba(99,102,241,.35); color: #a5b4fc; }
+.chip.gemini { background: rgba(16,185,129,.12);  border: 1px solid rgba(16,185,129,.3);  color: #6ee7b7; }
+.chip.openai { background: rgba(251,191,36,.1);  border: 1px solid rgba(251,191,36,.28); color: #fde68a; }
+
+/* ── Prompt button ── */
+.prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 11px;
+  border-radius: 20px;
+  font-size: 0.71rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+  transition: filter .15s, transform .15s;
+  white-space: nowrap;
+}
+.prompt-btn.blue   { border-color: rgba(59,130,246,.45);  color: #93c5fd; }
+.prompt-btn.purple { border-color: rgba(139,92,246,.45); color: #c4b5fd; }
+.prompt-btn:hover  { filter: brightness(1.25); transform: translateY(-1px); }
+
+/* ── JSON mini preview ── */
+.json-box {
+  margin-top: 10px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 13px;
+  font-family: monospace;
+  font-size: 0.73rem;
+  line-height: 1.65;
+}
+.jk { color: #c084fc; }
+.js { color: #86efac; }
+.jt { color: #6ee7b7; }
+.jf { color: #f87171; }
+.jn { color: #fcd34d; }
+
+/* ── Connector ── */
+.connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 2px 0;
+}
+.conn-line {
+  width: 2px;
+  height: 30px;
+  background: linear-gradient(to bottom, #334155, #475569);
+}
+.conn-label {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + 10px);
+  transform: translateY(-50%);
+  font-size: 0.67rem;
+  font-family: monospace;
+  color: #475569;
+  white-space: nowrap;
+  background: #0f172a;
+  padding: 0 5px;
+}
+.conn-arrow { color: #475569; font-size: 0.9rem; margin-top: -3px; }
+
+/* ── Step label ── */
+.step-label {
+  width: 100%;
+  margin-bottom: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #8b5cf6;
+}
+
+/* ── Merge visual ── */
+.merge-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 10px; }
+.mbox {
+  width: 13px; height: 13px; border-radius: 3px;
+  background: rgba(139,92,246,.22);
+  border: 1px solid rgba(139,92,246,.4);
+}
+.mbox.mid  { width: 20px; background: rgba(139,92,246,.5); }
+.mbox.last { width: 28px; background: #8b5cf6; }
+
+.merge-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.merge-row .label { font-size: 0.73rem; color: #64748b; }
+.merge-row .label.accent { color: #a78bfa; font-weight: 600; }
+.merge-arrow { font-size: 0.7rem; color: #8b5cf6; margin: 4px 0 2px 14px; }
+
+/* ── Divider (shared file) ── */
+.shared-file {
+  max-width: 640px;
+  margin: 24px auto 36px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.shared-file-line { flex: 1; height: 1px; background: #1e293b; }
+.shared-file-box {
+  padding: 7px 18px;
+  background: rgba(16,185,129,.09);
+  border: 1px solid rgba(16,185,129,.38);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #6ee7b7;
+}
+
+/* ── Modal ── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.72);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(3px);
+}
+.overlay.on { display: flex; }
+
+.modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  max-width: 660px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 32px 64px rgba(0,0,0,.55);
+  overflow: hidden;
+}
+.modal-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-head-title { font-weight: 700; font-size: 0.95rem; color: #f1f5f9; font-family: monospace; }
+.modal-head-sub   { font-size: 0.74rem; color: #64748b; margin-top: 3px; }
+
+.modal-close {
+  background: none; border: none; color: #475569;
+  font-size: 1.2rem; cursor: pointer; padding: 2px 6px;
+  border-radius: 6px; line-height: 1; flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.modal-close:hover { color: #e2e8f0; background: #334155; }
+
+.modal-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+
+.config-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.cpill {
+  padding: 3px 10px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.73rem;
+  color: #94a3b8;
+}
+.cpill span { color: #fcd34d; }
+
+.prompt-pre {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.72;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0f172a;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+}
+</style>
+</head>
+<body>
+
+<p class="page-title">🍱 VLM Food Recognition Pipeline</p>
+<p class="page-subtitle">finetune/ &nbsp;·&nbsp; pipeline.py → extract.py</p>
+
+<!-- ═══════════════ pipeline.py ═══════════════ -->
+<div class="pipeline-section">
+  <div class="section-header blue">
+    <div>
+      <div class="section-label">pipeline.py</div>
+      <div class="section-meta">trajectory 수집 + outcome 계산 → results.json</div>
+    </div>
+    <div class="section-badge">TASK: 주어진 음식 이미지를 보고 음식명을 한국어로 맞추시오.</div>
+  </div>
+
+  <div class="flow">
+
+    <div class="node file">
+      <div class="node-title"><span class="node-icon">📄</span> food_list.txt</div>
+      <div class="node-body">탭 구분 형식 — <code>[번호]\t[음식명]</code></div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">parse_food_list()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node blue">
+      <div class="node-title"><span class="node-icon">🔍</span> Q3 이미지 탐색</div>
+      <div class="node-body"><code>IMAGE_ROOT / {음식명} / Q3 / *.JPG</code> — 첫 번째 파일 선택</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">find_q3_image()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node models">
+      <div class="node-title">
+        <span class="node-icon">🤖</span> VLM 예측
+        <button class="prompt-btn blue" onclick="open_modal('trajectory')">📋 TRAJECTORY_PROMPT</button>
+      </div>
+      <div class="node-body">이미지 + 프롬프트 → 각 모델 독립 추론 · raw JSON 반환</div>
+      <div class="chips">
+        <span class="chip local">qwen3-vl-8b (local)</span>
+        <span class="chip gemini">gemini-3.5-flash</span>
+        <span class="chip gemini">gemini-3.1-flash-lite</span>
+        <span class="chip openai">gpt-5.4-mini</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">parse_trajectory()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node blue">
+      <div class="node-title"><span class="node-icon">💭</span> Trajectory 파싱</div>
+      <div class="node-body">JSON 응답에서 think / action / obs 추출. 실패 시 raw text fallback.</div>
+      <div class="json-box">
+{<br>
+&nbsp;&nbsp;<span class="jk">"think"</span>:  <span class="js">"이미지에서 검은 콩이 섞인 밥이 보입니다..."</span>,<br>
+&nbsp;&nbsp;<span class="jk">"action"</span>: <span class="js">"콩밥으로 추측합니다"</span>,<br>
+&nbsp;&nbsp;<span class="jk">"obs"</span>:    <span class="js">"콩밥"</span><br>
+}
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">compute_outcomes()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node blue">
+      <div class="node-title"><span class="node-icon">📊</span> Outcome 계산</div>
+      <div class="node-body">
+        <strong>ES</strong> — obs vs 정답 완전 일치 여부<br>
+        <strong>EWC</strong> — <code>text-embedding-3-small</code> 코사인 유사도<br>
+        OpenAI Embedding API 사용 · 예측 모델과 무관
+      </div>
+      <div class="json-box">
+<span class="jk">"qwen3-vl-8b"</span>:           { <span class="jk">"text"</span>: <span class="js">"콩밥"</span>,   <span class="jk">"ES"</span>: <span class="jt">true</span>,  <span class="jk">"EWC"</span>: <span class="jn">0.9921</span> }<br>
+<span class="jk">"gemini-3.5-flash"</span>:      { <span class="jk">"text"</span>: <span class="js">"검은콩밥"</span>, <span class="jk">"ES"</span>: <span class="jf">false</span>, <span class="jk">"EWC"</span>: <span class="jn">0.8340</span> }
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">json.dump()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node output">
+      <div class="node-title"><span class="node-icon">💾</span> result/results.json</div>
+      <div class="node-body">task · trajectory_prompt · models · results[ {food, image, trajectory, outcome} ]</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- shared file divider -->
+<div class="shared-file">
+  <div class="shared-file-line"></div>
+  <div class="shared-file-box">📂 result/results.json</div>
+  <div class="shared-file-line"></div>
+</div>
+
+<!-- ═══════════════ extract.py ═══════════════ -->
+<div class="pipeline-section">
+  <div class="section-header purple">
+    <div>
+      <div class="section-label">extract.py</div>
+      <div class="section-meta">패턴 추출 → 계층적 병합 → 스킬 합성</div>
+    </div>
+    <div class="section-badge">Model: gemini-3.5-flash &nbsp;·&nbsp; K=3 &nbsp;·&nbsp; H=10</div>
+  </div>
+
+  <div class="flow">
+
+    <!-- Step 1 -->
+    <div class="step-label">Step 1 — 패턴 추출</div>
+
+    <div class="node purple">
+      <div class="node-title">
+        <span class="node-icon">🔬</span> Per-trajectory 패턴 추출
+        <button class="prompt-btn purple" onclick="open_modal('extract')">📋 EXTRACT_PROMPT</button>
+      </div>
+      <div class="node-body">
+        <strong>(음식 × 모델)</strong> 쌍마다 Gemini를 <strong>새 클라이언트</strong>로 호출.<br>
+        trajectory(think/action/obs) + ES/EWC를 컨텍스트로 제공.<br>
+        최대 <code>K=3</code>개의 success / failure 패턴 추출.
+      </div>
+      <div class="merge-row" style="margin-top:12px;">
+        <div class="merge-grid">
+          <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+          <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+          <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+          <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+        </div>
+        <span class="label">음식(N) × 모델(4) 패턴 세트</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">json.dump()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node output">
+      <div class="node-title"><span class="node-icon">💾</span> result/success_failure_pattern.json</div>
+      <div class="node-body">[ { food, model, outcome, patterns: [{type, pattern, description}] } ]</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line" style="height:24px"></div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-label">Step 2 — 계층적 병합</div>
+
+    <div class="node purple">
+      <div class="node-title">
+        <span class="node-icon">🗜️</span> Hierarchical Merge
+        <button class="prompt-btn purple" onclick="open_modal('merge')">📋 MERGE_PROMPT</button>
+      </div>
+      <div class="node-body">
+        <code>H=10</code>개씩 묶어 병합 → 1개 남을 때까지 반복.<br>
+        중복 제거 · 추상화 수준 향상 · 중요도 순 보존. 각 호출 새 클라이언트.
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="merge-row">
+          <div class="merge-grid">
+            <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+            <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+            <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+            <div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div><div class="mbox"></div>
+          </div>
+          <span class="label">N개 패턴 세트</span>
+        </div>
+        <div class="merge-arrow">↓ H=10씩 merge_batch()</div>
+        <div class="merge-row">
+          <div class="merge-grid">
+            <div class="mbox mid"></div><div class="mbox mid"></div><div class="mbox mid"></div><div class="mbox mid"></div>
+          </div>
+          <span class="label">라운드 1: ceil(N/10) 세트</span>
+        </div>
+        <div class="merge-arrow">↓ 반복 …</div>
+        <div class="merge-row">
+          <div class="merge-grid"><div class="mbox last"></div></div>
+          <span class="label accent">최종 1개 패턴 세트</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line" style="height:24px"></div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-label">Step 3 — 스킬 합성</div>
+
+    <div class="node purple">
+      <div class="node-title">
+        <span class="node-icon">⚗️</span> Skill 합성
+        <button class="prompt-btn purple" onclick="open_modal('synthesis')">📋 SYNTHESIS_PROMPT</button>
+      </div>
+      <div class="node-body">
+        성공/실패 패턴을 통합 → 단일 스킬 합성.<br>
+        <code>max_skills=1</code> · <code>max_skill_chars=1000</code> · 새 Gemini 클라이언트.
+      </div>
+      <div class="json-box">
+[{<br>
+&nbsp;&nbsp;<span class="jk">"name"</span>:        <span class="js">"visual-feature-anchoring"</span>,<br>
+&nbsp;&nbsp;<span class="jk">"description"</span>: <span class="js">"..."</span>,<br>
+&nbsp;&nbsp;<span class="jk">"body"</span>:        <span class="js">"## Strategies\n..."</span><br>
+}]
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">json.dump()</div>
+      <div class="conn-arrow">▼</div>
+    </div>
+
+    <div class="node output">
+      <div class="node-title"><span class="node-icon">🏆</span> result/skill.json</div>
+      <div class="node-body">[ { name, description, body } ] — 최종 합성 스킬 1개</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+<div class="overlay" id="overlay" onclick="overlay_click(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title" id="m-title"></div>
+        <div class="modal-head-sub"   id="m-sub"></div>
+      </div>
+      <button class="modal-close" onclick="close_modal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="config-pills" id="m-pills"></div>
+      <pre class="prompt-pre" id="m-text"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  trajectory: {
+    title: 'TRAJECTORY_PROMPT',
+    sub:   'config.py  ·  pipeline.py → VLM 모델에 전달되는 프롬프트',
+    pills: [
+      { k: 'set_trajectory_prompt()', v: 'setter 함수로 런타임 변경 가능' }
+    ],
+    text: `You are analyzing a food image. Respond ONLY with a JSON object in this exact format (no markdown, no extra text):
+{
+  "think": "<describe what you observe in the image and why you identify it as a specific food>",
+  "action": "<state your prediction in Korean, e.g. '망고로 추측합니다'>",
+  "obs": "<food name in Korean only>"
+}`
+  },
+
+  extract: {
+    title: 'EXTRACT_PROMPT',
+    sub:   'config.py  ·  (food × model) 쌍마다 새 Gemini 클라이언트로 호출',
+    pills: [
+      { k: 'EXTRACT_MODEL', v: 'gemini-3.5-flash' },
+      { k: 'EXTRACT_K',     v: '3  (최대 패턴 수)' }
+    ],
+    text: `You analyse a single agent trajectory and extract [success patterns | failure patterns] -
+high-level, reusable, transferable behavioural patterns. Focus on genuinely novel,
+reusable patterns from THIS trajectory; do NOT try to be exhaustive.
+
+What is a pattern? A pattern is a high-level behaviour that is (1) transferable
+across a broad class of tasks, (2) actionable enough to follow, (3) non-obvious
+- going beyond common sense, and (4) self-contained - understandable without the
+original trajectory.
+
+Per-type guidance (success). Capture effective strategies, decision patterns, and
+methodological insights. Ask: "What did this agent do RIGHT that other agents
+facing similar tasks should also do?"
+
+Per-type guidance (failure). Capture error patterns, anti-patterns, and non-obvious
+pitfalls. Ask: "What should an agent AVOID doing when facing similar tasks?"
+
+Quality requirements. Each pattern must be (i) high-level and domain-general, (ii)
+maximally broad in coverage, (iii) information-dense with a concrete description,
+and (iv) free of task-specific details (no specific file names, identifiers, error
+messages, or API calls).
+
+Constraints. Extract at most [3] patterns from this trajectory; each as a pattern
+name and a 2-4 sentence description.
+
+Output format. A JSON list of {"type", "pattern", "description"} entries.
+If no useful patterns are found, return an empty list.
+Output ONLY the JSON list with no markdown fences.`
+  },
+
+  merge: {
+    title: 'MERGE_PROMPT',
+    sub:   'config.py  ·  계층적 병합 각 라운드 (H=10씩 묶어 반복 호출)',
+    pills: [
+      { k: 'MERGE_H', v: '10  (한 번에 병합할 패턴 세트 수)' }
+    ],
+    text: `You receive several pattern sets, each extracted from a different agent trajectory,
+and merge them into a single consolidated pattern set.
+
+Guidelines.
+1. Deduplicate: if multiple patterns describe the same or overlapping behaviour,
+   combine them into ONE stronger pattern with the best description.
+2. Generalise: raise the abstraction level to cover more scenarios; a single
+   well-generalised pattern is worth more than several narrow ones.
+3. Preserve type: keep success and failure patterns separate; do NOT convert
+   between types.
+4. Preserve quality: drop vague or low-value patterns; keep concrete, actionable ones.
+5. Prioritise: when there are too many patterns, retain the most important and
+   broadly applicable ones.
+
+Quality requirements. Each merged pattern must be transferable across tasks,
+information-dense, non-obvious, and free of task-specific details.
+
+Output format. A JSON list of {"type", "pattern", "description"} entries.
+Output ONLY the JSON list with no markdown fences.`
+  },
+
+  synthesis: {
+    title: 'SYNTHESIS_PROMPT',
+    sub:   'config.py  ·  최종 패턴 세트 → 스킬 합성 (새 Gemini 클라이언트)',
+    pills: [
+      { k: 'SYNTHESIS_MAX_SKILLS',     v: '1' },
+      { k: 'SYNTHESIS_MAX_SKILL_CHARS', v: '1000' }
+    ],
+    text: `You receive a consolidated set of success and failure patterns and synthesise them
+into skills.
+
+Synthesis strategy.
+1. Integrate both polarities: a good skill includes both what TO DO (from success
+   patterns) and what to AVOID (from failure patterns).
+2. Organise thematically: group related patterns into coherent skills around
+   shared themes.
+3. Structure the body clearly: recommended approaches, common pitfalls, decision
+   criteria for when to apply, and verification methods.
+4. Maintain information density: every sentence carries actionable content; no platitudes.
+5. Keep the description short: 1-2 sentences only; all detail goes in the body.
+
+Schema requirements.
+  name        — lowercase-hyphen slug, ≤ 64 chars
+  description — 1-2 sentences: what class of problems, when to apply
+  body        — Markdown: strategies, pitfalls, decision criteria, verification
+
+Budget. Maximum [1] skills, each ≤ [1000] characters.
+
+Output format. A JSON list of {"name", "description", "body"} objects.
+Output ONLY the JSON list with no markdown fences.`
+  }
+};
+
+function open_modal(key) {
+  const d = DATA[key];
+  document.getElementById('m-title').textContent = d.title;
+  document.getElementById('m-sub').textContent   = d.sub;
+  document.getElementById('m-text').textContent  = d.text;
+  document.getElementById('m-pills').innerHTML   =
+    d.pills.map(p => `<div class="cpill">${p.k} = <span>${p.v}</span></div>`).join('');
+  document.getElementById('overlay').classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function close_modal() {
+  document.getElementById('overlay').classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+function overlay_click(e) {
+  if (e.target === document.getElementById('overlay')) close_modal();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') close_modal(); });
+</script>
+</body>
+</html>
