@@ -5,7 +5,17 @@ from models.local_qwen import LocalQwenVLM
 # for loop
 LOOP_EPOCHS = 10
 EARLY_STOPPING_PATIENCE = 3
-LOOP_LEARNING_RATE = 1.2  # 매 epoch마다 SYNTHESIS_MAX_SKILL_CHARS에 곱함
+LOOP_LEARNING_RATE = 1.2        # EWC가 개선된 epoch에만 SYNTHESIS_MAX_SKILL_CHARS에 곱함
+OFFER_FAILED_SKILL = False      # True: 병합 시 이전 실패 스킬을 에이전트에 제시
+
+FAILED_SKILL_HINT_PROMPT = (
+    "\n\nImportant context — previously attempted skill (do NOT reproduce):\n"
+    "The skill below was synthesised in the prior iteration and evaluated on the test set, "
+    "but it FAILED to improve performance over the accepted skill. "
+    "Treat it as a negative example: understand what it got wrong or over-specified, "
+    "and ensure the merged skill does not repeat those patterns.\n"
+    "Failed skill:\n{failed_skill}"
+)
 
 IMAGE_ROOT = (
     "/home/202421012/food/"

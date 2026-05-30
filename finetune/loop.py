@@ -312,6 +312,7 @@ def _merge_skills(
     current_skill: dict,
     new_skill: dict,
     max_skill_chars: int,
+    failed_skill: dict | None = None,
 ) -> list:
     instruction = config.SYNTHESIS_MERGE_PROMPT.format(
         max_skills=config.SYNTHESIS_MAX_SKILLS,
@@ -319,6 +320,13 @@ def _merge_skills(
     )
     skills_input = json.dumps([current_skill, new_skill], ensure_ascii=False)
     prompt = instruction + f"\n\nSkills to merge:\n{skills_input}"
+
+    if config.OFFER_FAILED_SKILL and failed_skill is not None:
+        prompt += config.FAILED_SKILL_HINT_PROMPT.format(
+            failed_skill=json.dumps(failed_skill, ensure_ascii=False)
+        )
+        print("  (이전 실패 스킬 힌트 첨부)")
+
     print("스킬 병합 중 ...", flush=True)
     try:
         return _parse_json_list(_call_gemini(prompt))
@@ -423,12 +431,14 @@ def main():
     parser.add_argument("--models", nargs="+", default=list(config.MODEL_REGISTRY.keys()))
     args = parser.parse_args()
 
-    model_keys    = args.models
-    patience      = config.EARLY_STOPPING_PATIENCE
-    best_ewc      = -float("inf")
-    best_skill    = None
-    best_epoch    = 0
-    current_skill = None  # None = 스킬 없음
+    model_keys       = args.models
+    patience         = config.EARLY_STOPPING_PATIENCE
+    best_ewc         = -float("inf")
+    best_skill       = None
+    best_epoch       = 0
+    current_skill    = None   # None = 스킬 없음
+    failed_candidate = None   # 직전 에폭에서 시도했지만 개선되지 않은 candidate
+    max_chars        = config.SYNTHESIS_MAX_SKILL_CHARS  # 개선 시에만 scaling
 
     print(f"\n루프 시작: epochs={args.epochs}, patience={patience}, lr={config.LOOP_LEARNING_RATE}")
     print(f"모델: {model_keys}\n")
@@ -438,10 +448,6 @@ def main():
     _run_evaluate(model_keys, "log/baseline")
 
     for epoch in range(1, args.epochs + 1):
-        max_chars = int(
-            config.SYNTHESIS_MAX_SKILL_CHARS * (config.LOOP_LEARNING_RATE ** (epoch - 1))
-        )
-
         print(f"\n{'═' * 64}")
         print(f"  Epoch {epoch} / {args.epochs}  (max_skill_chars={max_chars})")
         print(f"{'═' * 64}")
@@ -465,7 +471,11 @@ def main():
         # D. 기존 스킬 있으면 병합, 없으면 그대로 사용
         if current_skill and new_skills:
             print("\n--- D. 기존 스킬 병합 ---")
-            candidate_skills = _merge_skills(current_skill, new_skills[0], max_chars)
+            candidate_skills = _merge_skills(current_skill, new_skills[0], max_chars, failed_candidate)
+            merged_path = os.path.join(epoch_dir, "merged_skill.json")
+            with open(merged_path, "w", encoding="utf-8") as f:
+                json.dump(candidate_skills, f, ensure_ascii=False, indent=2)
+            print(f"저장: {merged_path}")
         else:
             candidate_skills = new_skills
 
@@ -483,13 +493,16 @@ def main():
         print(f"\n[Epoch {epoch}] EWC {new_ewc:.4f}  (best {best_ewc:.4f})  patience {patience}")
 
         if new_ewc > best_ewc:
-            best_ewc      = new_ewc
-            best_skill    = candidate
-            best_epoch    = epoch
-            current_skill = candidate
-            patience      = config.EARLY_STOPPING_PATIENCE
-            print("  ▲ 개선 — 스킬 업데이트, patience 초기화")
+            best_ewc         = new_ewc
+            best_skill       = candidate
+            best_epoch       = epoch
+            current_skill    = candidate
+            patience         = config.EARLY_STOPPING_PATIENCE
+            failed_candidate = None  # 성공 시 초기화
+            max_chars        = int(max_chars * config.LOOP_LEARNING_RATE)  # 개선 시에만 scaling
+            print(f"  ▲ 개선 — 스킬 업데이트, patience 초기화, max_chars → {max_chars}")
         else:
+            failed_candidate = candidate  # 다음 병합 시 힌트로 전달
             patience -= 1
             print(f"  ▼ 미개선 — 이전 스킬 유지, patience → {patience}")
             if patience <= 0:
