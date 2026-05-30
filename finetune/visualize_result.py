@@ -32,10 +32,7 @@ def visualize(before_path: str, after_path: str):
         print(f"  after  음식: {sorted(after)[:5]} ...", file=sys.stderr)
         sys.exit(1)
 
-    all_models = sorted(
-        set(m for d in before.values() for m in d)
-        | set(m for d in after.values() for m in d)
-    )
+    all_models = sorted(set(m for d in after.values() for m in d))
 
     # ── 헤더 ────────────────────────────────────────────────────────────────
     print()

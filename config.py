@@ -23,7 +23,7 @@ def set_prompt(new_prompt: str):
 
 
 MODEL_REGISTRY = {
-    "qwen3-vl-8b":           lambda: LocalQwenVLM("Qwen/Qwen3-VL-8B-Instruct"),
+    # "qwen3-vl-8b":           lambda: LocalQwenVLM("Qwen/Qwen3-VL-8B-Instruct"),
     # "qwen3-vl-32b":          lambda: LocalQwenVLM("Qwen/Qwen3-VL-32B-Instruct"),
     "gemini-3.5-flash":      lambda: GeminiVLM("gemini-3.5-flash"),
     "gemini-3.1-flash-lite": lambda: GeminiVLM("gemini-3.1-flash-lite"),

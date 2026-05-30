@@ -59,7 +59,10 @@ def build_extract_prompt(task: str, food: str, model_key: str, traj: dict, outco
 
 def extract_all_patterns(data: dict) -> list[dict]:
     task = data.get("task", "")
-    model_keys = data.get("models", [])
+    available = set(config.MODEL_REGISTRY.keys())
+    model_keys = [m for m in data.get("models", []) if m in available]
+    if not model_keys:
+        print("[경고] config.MODEL_REGISTRY에 활성화된 모델이 결과 파일에 없습니다.", file=sys.stderr)
     results = data.get("results", [])
 
     all_entries = []
