@@ -8,7 +8,8 @@ IMAGE_ROOT = (
     "01.데이터/2.Validation/원천데이터/image"
 )
 
-FOOD_LIST_PATH = "/home/202421012/food/finetune_prompt/food_list.txt"
+FOOD_LIST_TRAIN_PATH = "/home/202421012/food/finetune_prompt/food_list_train.txt"
+FOOD_LIST_TEST_PATH  = "/home/202421012/food/finetune_prompt/food_list_test.txt"
 
 TASK = "주어진 음식 이미지를 보고 음식명을 한국어로 맞추시오."
 
@@ -17,10 +18,13 @@ TRAJECTORY_PROMPT = (
     "Respond ONLY with a JSON object in this exact format (no markdown, no extra text):\n"
     "{\n"
     '  "think": "<describe what you observe in the image and why you identify it as a specific food>",\n'
-    '  "action": "<state your prediction in Korean, e.g. \'망고로 추측합니다\'>",\n'
+    '  "action": "<state your prediction in Korean>",\n'
     '  "obs": "<food name in Korean only>"\n'
     "}"
 )
+
+
+EVAL_SHOW_ES = False  # True 이면 outcome 에 ES 포함, False 이면 제외
 
 
 def set_task(new_task: str):
@@ -109,7 +113,7 @@ SYNTHESIS_PROMPT = (
 
 
 MODEL_REGISTRY = {
-    "qwen3-vl-8b":           lambda: LocalQwenVLM("Qwen/Qwen3-VL-8B-Instruct"),
+    # "qwen3-vl-8b":           lambda: LocalQwenVLM("Qwen/Qwen3-VL-8B-Instruct"),
     # "qwen3-vl-32b":          lambda: LocalQwenVLM("Qwen/Qwen3-VL-32B-Instruct"),
     "gemini-3.5-flash":      lambda: GeminiVLM("gemini-3.5-flash"),
     "gemini-3.1-flash-lite": lambda: GeminiVLM("gemini-3.1-flash-lite"),

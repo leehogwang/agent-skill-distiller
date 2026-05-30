@@ -3,35 +3,13 @@ import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 
 import config
-
-
-def parse_food_list(path: str) -> list[str]:
-    foods = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split("\t", maxsplit=1)
-            name = parts[1].strip() if len(parts) == 2 else parts[0].strip()
-            if name:
-                foods.append(name)
-    return foods
-
-
-def find_q3_image(food_name: str) -> str | None:
-    q3_dir = Path(config.IMAGE_ROOT) / food_name / "Q3"
-    if not q3_dir.exists():
-        return None
-    jpgs = sorted(p for p in q3_dir.iterdir() if p.suffix.upper() == ".JPG")
-    return str(jpgs[0]) if jpgs else None
+from utils import parse_food_list, find_q3_image
 
 
 def run(model_keys: list[str], prompt: str, limit: int | None, output_path: str):
-    foods = parse_food_list(config.FOOD_LIST_PATH)
+    foods = parse_food_list(config.FOOD_LIST_TRAIN_PATH)
     if limit:
         foods = foods[:limit]
 
@@ -45,7 +23,7 @@ def run(model_keys: list[str], prompt: str, limit: int | None, output_path: str)
 
     results = []
     for food in foods:
-        image_path = find_q3_image(food)
+        image_path = find_q3_image(food, config.IMAGE_ROOT)
         if image_path is None:
             print(f"[건너뜀] {food}: Q3 이미지 없음", file=sys.stderr)
             continue
@@ -74,6 +52,7 @@ def run(model_keys: list[str], prompt: str, limit: int | None, output_path: str)
         "results": results,
     }
 
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
@@ -84,7 +63,7 @@ def run(model_keys: list[str], prompt: str, limit: int | None, output_path: str)
 def main():
     available = list(config.MODEL_REGISTRY.keys())
 
-    parser = argparse.ArgumentParser(description="VLM 음식 인식 파이프라인")
+    parser = argparse.ArgumentParser(description="VLM 음식 인식 파이프라인 (train set)")
     parser.add_argument(
         "--models", nargs="+", default=available,
         help=f"실행할 모델 키 목록 (기본: 전체). 가능한 값: {available}",
@@ -99,7 +78,7 @@ def main():
     )
     parser.add_argument(
         "--output", default="result/results.json",
-        help="결과 JSON 저장 경로 (기본: results.json)",
+        help="결과 JSON 저장 경로",
     )
     args = parser.parse_args()
 

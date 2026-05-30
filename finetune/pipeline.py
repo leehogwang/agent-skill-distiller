@@ -1,120 +1,12 @@
 import argparse
 import json
 import os
-import re
 import sys
 from datetime import datetime
-from pathlib import Path
-
-import numpy as np
-from dotenv import load_dotenv
-from openai import OpenAI
 
 import config
+from utils import parse_food_list, find_q3_image, parse_trajectory, compute_outcomes
 
-load_dotenv()
-
-EMBEDDING_MODEL = "text-embedding-3-small"
-
-
-# ── trajectory parsing ────────────────────────────────────────────────────────
-
-def parse_trajectory(raw: str) -> dict:
-    """Extract think/action/obs from model response. Falls back gracefully."""
-    # strip markdown code fences if present
-    text = re.sub(r"```(?:json)?\s*", "", raw).strip()
-    # find first {...} block
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            obj = json.loads(match.group())
-            return {
-                "think":  str(obj.get("think", "")),
-                "action": str(obj.get("action", "")),
-                "obs":    str(obj.get("obs", "")).strip(),
-            }
-        except json.JSONDecodeError:
-            pass
-    return {"think": "", "action": "", "obs": raw.strip()}
-
-
-# ── embedding & cosine ────────────────────────────────────────────────────────
-
-def embed_all(texts: list[str], client: OpenAI) -> dict[str, list[float]]:
-    unique = list(dict.fromkeys(t.strip() for t in texts if t.strip()))
-    if not unique:
-        return {}
-    response = client.embeddings.create(model=EMBEDDING_MODEL, input=unique)
-    return {text: item.embedding for text, item in zip(unique, response.data)}
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    a, b = np.array(a), np.array(b)
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
-
-
-# ── outcome computation ───────────────────────────────────────────────────────
-
-def compute_outcomes(results: list[dict]) -> list[dict]:
-    """Add outcome (ES + EWC) to each result item. Uses OpenAI embeddings."""
-    client = OpenAI(api_key=os.environ["OPENAI_KEY"])
-
-    # collect all texts for batch embedding
-    all_texts = []
-    for item in results:
-        all_texts.append(item["food"])
-        for traj in item["trajectory"].values():
-            all_texts.append(traj["obs"])
-
-    print(f"\n임베딩 요청: {len(set(t.strip() for t in all_texts if t.strip()))}개 고유 텍스트")
-    emb_cache = embed_all(all_texts, client)
-
-    for item in results:
-        food = item["food"]
-        food_emb = emb_cache.get(food.strip())
-        outcome = {}
-
-        for model_key, traj in item["trajectory"].items():
-            obs = traj["obs"]
-            es = obs == food
-
-            if food_emb and obs.strip() in emb_cache:
-                ewc = cosine_similarity(food_emb, emb_cache[obs.strip()])
-            else:
-                ewc = None
-
-            outcome[model_key] = {"text": obs, "ES": es, "EWC": ewc}
-
-        item["outcome"] = outcome
-
-    return results
-
-
-# ── food list & image ─────────────────────────────────────────────────────────
-
-def parse_food_list(path: str) -> list[str]:
-    foods = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split("\t", maxsplit=1)
-            name = parts[1].strip() if len(parts) == 2 else parts[0].strip()
-            if name:
-                foods.append(name)
-    return foods
-
-
-def find_q3_image(food_name: str) -> str | None:
-    q3_dir = Path(config.IMAGE_ROOT) / food_name / "Q3"
-    if not q3_dir.exists():
-        return None
-    jpgs = sorted(p for p in q3_dir.iterdir() if p.suffix.upper() == ".JPG")
-    return str(jpgs[0]) if jpgs else None
-
-
-# ── main run ──────────────────────────────────────────────────────────────────
 
 def run(
     model_keys: list[str],
@@ -123,7 +15,7 @@ def run(
     limit: int | None,
     output_path: str,
 ):
-    foods = parse_food_list(config.FOOD_LIST_PATH)
+    foods = parse_food_list(config.FOOD_LIST_TRAIN_PATH)
     if limit:
         foods = foods[:limit]
 
@@ -137,7 +29,7 @@ def run(
 
     results = []
     for food in foods:
-        image_path = find_q3_image(food)
+        image_path = find_q3_image(food, config.IMAGE_ROOT)
         if image_path is None:
             print(f"[건너뜀] {food}: Q3 이미지 없음", file=sys.stderr)
             continue
@@ -161,8 +53,7 @@ def run(
             "trajectory": trajectory,
         })
 
-    # outcome은 예측 모델과 무관하게 OpenAI embedding으로 계산
-    results = compute_outcomes(results)
+    results = compute_outcomes(results, os.environ["OPENAI_KEY"])
 
     output = {
         "task": task,
@@ -183,27 +74,15 @@ def run(
 def main():
     available = list(config.MODEL_REGISTRY.keys())
 
-    parser = argparse.ArgumentParser(description="VLM 음식 인식 trajectory 파이프라인")
+    parser = argparse.ArgumentParser(description="VLM 음식 인식 trajectory 파이프라인 (train set)")
     parser.add_argument(
         "--models", nargs="+", default=available,
         help=f"실행할 모델 키 목록 (기본: 전체). 가능한 값: {available}",
     )
-    parser.add_argument(
-        "--task", default=config.TASK,
-        help="태스크 설명 (task 필드에 저장됨)",
-    )
-    parser.add_argument(
-        "--trajectory-prompt", default=config.TRAJECTORY_PROMPT,
-        help="VLM에 전달할 trajectory 프롬프트",
-    )
-    parser.add_argument(
-        "--limit", type=int, default=None,
-        help="테스트용: food_list에서 앞 N개만 처리",
-    )
-    parser.add_argument(
-        "--output", default="result/results.json",
-        help="결과 JSON 저장 경로",
-    )
+    parser.add_argument("--task",              default=config.TASK)
+    parser.add_argument("--trajectory-prompt", default=config.TRAJECTORY_PROMPT)
+    parser.add_argument("--limit",             type=int, default=None)
+    parser.add_argument("--output",            default="result/results.json")
     args = parser.parse_args()
 
     run(
